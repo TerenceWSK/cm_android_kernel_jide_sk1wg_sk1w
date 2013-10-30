@@ -602,10 +602,6 @@ static int cpufreq_interactive_speedchange_task(void *data)
 				__cpufreq_driver_target(pcpu->policy,
 							max_freq,
 							CPUFREQ_RELATION_H);
-			trace_cpufreq_interactive_setspeed(cpu,
-						     pcpu->target_freq,
-						     pcpu->policy->cur);
-
 			up_read(&pcpu->enable_sem);
 		}
 	}
