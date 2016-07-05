@@ -714,9 +714,9 @@ static void avc_audit_pre_callback(struct audit_buffer *ab, void *a)
 {
 	struct common_audit_data *ad = a;
 	audit_log_format(ab, "avc:  %s ",
-			 ad->selinux_audit_data.denied ? "denied" : "granted");
-	avc_dump_av(ab, ad->selinux_audit_data.tclass,
-			ad->selinux_audit_data.audited);
+			 ad->selinux_audit_data->slad->denied ? "denied" : "granted");
+	avc_dump_av(ab, ad->selinux_audit_data->slad->tclass,
+			ad->selinux_audit_data->slad->audited);
 	audit_log_format(ab, " for ");
 }
 
@@ -737,6 +737,7 @@ static void avc_audit_post_callback(struct audit_buffer *ab, void *a)
 		audit_log_format(ab, " permissive=%u",
 				 ad->selinux_audit_data.result ? 0 : 1);
 	}
+
 }
 
 /* This is the slow part of avc audit with big stack footprint */
@@ -821,7 +822,7 @@ inline int avc_audit(u32 ssid, u32 tsid,
 	if (unlikely(denied)) {
 		audited = denied & avd->auditdeny;
 		/*
-		 * a->selinux_audit_data.auditdeny is TRICKY!  Setting a bit in
+		 * a->selinux_audit_data->auditdeny is TRICKY!  Setting a bit in
 		 * this field means that ANY denials should NOT be audited if
 		 * the policy contains an explicit dontaudit rule for that
 		 * permission.  Take notice that this is unrelated to the
@@ -830,15 +831,15 @@ inline int avc_audit(u32 ssid, u32 tsid,
 		 *
 		 * denied == READ
 		 * avd.auditdeny & ACCESS == 0 (not set means explicit rule)
-		 * selinux_audit_data.auditdeny & ACCESS == 1
+		 * selinux_audit_data->auditdeny & ACCESS == 1
 		 *
 		 * We will NOT audit the denial even though the denied
 		 * permission was READ and the auditdeny checks were for
 		 * ACCESS
 		 */
 		if (a &&
-		    a->selinux_audit_data.auditdeny &&
-		    !(a->selinux_audit_data.auditdeny & avd->auditdeny))
+		    a->selinux_audit_data->auditdeny &&
+		    !(a->selinux_audit_data->auditdeny & avd->auditdeny))
 			audited = 0;
 	} else if (result)
 		audited = denied = requested;
