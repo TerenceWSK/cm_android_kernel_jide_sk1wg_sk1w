@@ -306,13 +306,15 @@ static void avc_operation_decision_free(
 
 static void avc_operation_free(struct avc_operation_node *ops_node)
 {
-	struct avc_operation_decision_node *od_node;
+	struct avc_operation_decision_node *od_node, *tmp;
 
 	if (!ops_node)
 		return;
 
-	list_for_each_entry(od_node, &ops_node->od_head, od_list)
+	list_for_each_entry_safe(od_node, tmp, &ops_node->od_head, od_list) {
+		list_del(&od_node->od_list);
 		avc_operation_decision_free(od_node);
+	}
 	kmem_cache_free(avc_operation_node_cachep, ops_node);
 }
 
@@ -742,7 +744,7 @@ static void avc_audit_post_callback(struct audit_buffer *ab, void *a)
 
 /* This is the slow part of avc audit with big stack footprint */
 static noinline int slow_avc_audit(u32 ssid, u32 tsid, u16 tclass,
-		u32 requested, u32 audited, u32 denied,
+		u32 requested, u32 audited, u32 denied, int result,
 		struct common_audit_data *a,
 		unsigned flags)
 {
@@ -773,6 +775,7 @@ static noinline int slow_avc_audit(u32 ssid, u32 tsid, u16 tclass,
 	slad.tsid = tsid;
 	slad.audited = audited;
 	slad.denied = denied;
+	slad.result = result;
 
 	a->selinux_audit_data->slad = &slad;
 	common_lsm_audit(a, avc_audit_pre_callback, avc_audit_post_callback);
@@ -791,7 +794,7 @@ static inline int avc_operation_audit(u32 ssid, u32 tsid, u16 tclass,
 	if (likely(!audited))
 		return 0;
 	return slow_avc_audit(ssid, tsid, tclass, requested,
-			      audited, denied, ad, 0);
+			      audited, denied, result, ad, 0);
 }
 
 /**
@@ -851,7 +854,7 @@ inline int avc_audit(u32 ssid, u32 tsid,
 		return 0;
 
 	return slow_avc_audit(ssid, tsid, tclass,
-		requested, audited, denied,
+		requested, audited, denied, result,
 		a, flags);
 }
 
