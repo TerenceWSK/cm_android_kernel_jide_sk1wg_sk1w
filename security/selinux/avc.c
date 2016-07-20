@@ -306,13 +306,15 @@ static void avc_operation_decision_free(
 
 static void avc_operation_free(struct avc_operation_node *ops_node)
 {
-	struct avc_operation_decision_node *od_node;
+	struct avc_operation_decision_node *od_node, *tmp;
 
 	if (!ops_node)
 		return;
 
-	list_for_each_entry(od_node, &ops_node->od_head, od_list)
+	list_for_each_entry_safe(od_node, tmp, &ops_node->od_head, od_list) {
+		list_del(&od_node->od_list);
 		avc_operation_decision_free(od_node);
+	}
 	kmem_cache_free(avc_operation_node_cachep, ops_node);
 }
 
@@ -730,12 +732,12 @@ static void avc_audit_post_callback(struct audit_buffer *ab, void *a)
 {
 	struct common_audit_data *ad = a;
 	audit_log_format(ab, " ");
-	avc_dump_query(ab, ad->selinux_audit_data.ssid,
-			   ad->selinux_audit_data.tsid,
-			   ad->selinux_audit_data.tclass);
-	if (ad->selinux_audit_data.denied) {
+	avc_dump_query(ab, ad->selinux_audit_data->slad->ssid,
+			   ad->selinux_audit_data->slad->tsid,
+			   ad->selinux_audit_data->slad->tclass);
+	if (ad->selinux_audit_data->slad->denied) {
 		audit_log_format(ab, " permissive=%u",
-				 ad->selinux_audit_data.result ? 0 : 1);
+				 ad->selinux_audit_data->slad->result ? 0 : 1);
 	}
 
 }
@@ -747,10 +749,13 @@ static noinline int slow_avc_audit(u32 ssid, u32 tsid, u16 tclass,
 		unsigned flags)
 {
 	struct common_audit_data stack_data;
+	struct selinux_audit_data sad = {0,};
+	struct selinux_late_audit_data slad;
 
 	if (!a) {
 		a = &stack_data;
 		COMMON_AUDIT_DATA_INIT(a, NONE);
+		a->selinux_audit_data = &sad;
 	}
 
 	/*
@@ -761,19 +766,19 @@ static noinline int slow_avc_audit(u32 ssid, u32 tsid, u16 tclass,
 	 * happened a little later.
 	 */
 	if ((a->type == LSM_AUDIT_DATA_INODE) &&
-	    (flags & IPERM_FLAG_RCU))
+	    (flags & MAY_NOT_BLOCK))
 		return -ECHILD;
 
-	a->selinux_audit_data.tclass = tclass;
-	a->selinux_audit_data.requested = requested;
-	a->selinux_audit_data.ssid = ssid;
-	a->selinux_audit_data.tsid = tsid;
-	a->selinux_audit_data.audited = audited;
-	a->selinux_audit_data.denied = denied;
-	a->selinux_audit_data.result = result;
-	a->lsm_pre_audit = avc_audit_pre_callback;
-	a->lsm_post_audit = avc_audit_post_callback;
-	common_lsm_audit(a);
+	slad.tclass = tclass;
+	slad.requested = requested;
+	slad.ssid = ssid;
+	slad.tsid = tsid;
+	slad.audited = audited;
+	slad.denied = denied;
+	slad.result = result;
+
+	a->selinux_audit_data->slad = &slad;
+	common_lsm_audit(a, avc_audit_pre_callback, avc_audit_post_callback);
 	return 0;
 }
 
