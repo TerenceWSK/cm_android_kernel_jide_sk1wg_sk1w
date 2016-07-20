@@ -411,6 +411,10 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		if (this_dbs_info->requested_freq > policy->max)
 			this_dbs_info->requested_freq = policy->max;
 
+		/* Ensure requested_freq within policy min/max range. */
+		this_dbs_info->requested_freq =
+				max(policy->min, this_dbs_info->requested_freq);
+
 		__cpufreq_driver_target(policy, this_dbs_info->requested_freq,
 			CPUFREQ_RELATION_H);
 		return;
@@ -429,6 +433,10 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 				this_dbs_info->requested_freq = policy->min;
 		} else
 			this_dbs_info->requested_freq = policy->min;
+
+		/* Ensure requested_freq within policy min/max range. */
+		this_dbs_info->requested_freq =
+				min(policy->max, this_dbs_info->requested_freq);
 
 		/*
 		 * if we cannot reduce the frequency anymore, break out early
@@ -563,15 +571,14 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 		 * Stop the timerschedule work, when this governor
 		 * is used for first time
 		 */
-		if (dbs_enable == 0)
+		if (dbs_enable == 0) {
 			cpufreq_unregister_notifier(
 					&dbs_cpufreq_notifier_block,
 					CPUFREQ_TRANSITION_NOTIFIER);
-
-		mutex_unlock(&dbs_mutex);
-		if (!dbs_enable)
 			sysfs_remove_group(cpufreq_global_kobject,
-					   &dbs_attr_group);
+					&dbs_attr_group);
+		}
+		mutex_unlock(&dbs_mutex);
 
 		break;
 
